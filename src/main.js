@@ -51,7 +51,8 @@ const pillion = new Passenger(scene, 0xff3333, -0.3, RECOVERY_DIST, ROAD_WIDTH)
 const uiSpeed = document.getElementById('speed')
 const uiInstability = document.getElementById('instability')
 const uiDistance = document.getElementById('distance')
-const uiArrow = document.getElementById('arrow')
+const uiWaypoint = document.getElementById('waypoint-arrow')
+const uiHeading = document.getElementById('heading-arrow')
 
 // --- Game Logic ---
 function update() {
@@ -245,14 +246,19 @@ function update() {
   const isFinished = scooterPos.z > world.finishLinePos
   uiSpeed.innerText = `Speed: ${(scooter.speed * 100).toFixed(1)} | Rider: ${rider.onScooter ? 'ON' : 'OFF'} | Pillion: ${pillion.onScooter ? 'ON' : 'OFF'}`
   
-  // Compass Logic
+  // Compass Logic (Dual Needles)
   const distToFinish = world.finishLinePos - scooterPos.z
   uiDistance.innerText = `${Math.max(0, distToFinish).toFixed(0)}m`
   
-  // Arrow Rotation (Points to finish line relative to scooter view)
-  // Since road is straight, we calculate based on scooter's rotation.y
-  const angleToFinish = -scooter.rotation
-  uiArrow.style.transform = `rotate(${angleToFinish}rad)`
+  // 1. Waypoint Arrow (Angle to finish line in world space)
+  const dx = 0 - scooterPos.x
+  const dz = world.finishLinePos - scooterPos.z
+  const targetAngle = -Math.atan2(dx, dz) // World space angle
+  uiWaypoint.style.transform = `rotate(${targetAngle}rad)`
+  
+  // 2. Heading Arrow (Current scooter rotation in world space)
+  const currentHeading = -scooter.mesh.rotation.y
+  uiHeading.style.transform = `rotate(${currentHeading}rad)`
 
   if (isFinished) {
     uiSpeed.innerHTML += `<br><span style="color: #00ff00; font-size: 1.5em; font-weight: bold;">🏁 FINISHED! 🏁</span>`
