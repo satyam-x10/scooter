@@ -12,6 +12,7 @@ export class Passenger {
     this.recoveryDist = recoveryDist
     this.roadWidth = roadWidth
     this.recoveryTimestamp = 0
+    this.fallTimestamp = 0
     this.mesh.position.y = 0.5
     scene.add(this.mesh)
   }
@@ -28,6 +29,7 @@ export class Passenger {
       
       // Clamp to road during flight
       this.mesh.position.x = THREE.MathUtils.clamp(this.mesh.position.x, -this.roadWidth, this.roadWidth)
+      this.mesh.position.z = THREE.MathUtils.clamp(this.mesh.position.z, -450, 450) // Road length limit
 
       if (this.mesh.position.y < 0.2) {
         this.mesh.position.y = 0.2
@@ -38,18 +40,26 @@ export class Passenger {
 
   fall(impactVelocity) {
     if (!this.onScooter) return
-    // Immunity check (1 second cooldown after re-mounting)
-    if (Date.now() - this.recoveryTimestamp < 1000) return
+    // Temporarily removed immunity to ensure both fall consistently
+    // if (Date.now() - this.recoveryTimestamp < 1000) return
 
     this.onScooter = false
-    // Dramatic toss (Increased multiplier for far away landing)
-    this.velocity.copy(impactVelocity).multiplyScalar(4.0) 
-    this.velocity.y = 0.4 + Math.random() * 0.4
-    this.velocity.x += (Math.random() - 0.5) * 1.5
+    this.fallTimestamp = Date.now()
+    // Dramatic toss (Scale with impact speed)
+    const speedScale = impactVelocity.length() * 0.8 
+    this.velocity.copy(impactVelocity).normalize().multiplyScalar(speedScale)
+    this.velocity.y = 0.2 + speedScale * 0.1
+    // Add side variation so they don't land in the same spot
+    this.velocity.x += (Math.random() - 0.5) * (0.5 + speedScale)
+    this.velocity.z += (Math.random() - 0.5) * 0.2
   }
 
   tryRecover(scooterPos) {
     if (this.onScooter) return false
+    
+    // Recovery Cooldown: Cannot re-mount for 1.5 seconds after falling
+    if (Date.now() - this.fallTimestamp < 1500) return false
+
     const dist = this.mesh.position.distanceTo(scooterPos)
     if (dist < this.recoveryDist) {
       this.onScooter = true
