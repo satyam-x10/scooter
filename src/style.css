@@ -65,3 +65,34 @@ canvas {
   color: #aaa;
   margin-top: 5px;
 }
+
+#compass {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(15, 15, 15, 0.85);
+  padding: 15px 25px;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+}
+
+#distance {
+  font-family: 'Courier New', Courier, monospace;
+  color: #00ff00;
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+#arrow {
+  font-size: 2rem;
+  color: #ffcc00;
+  transform-origin: center;
+  transition: transform 0.1s ease-out;
+}

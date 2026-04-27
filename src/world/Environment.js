@@ -5,8 +5,12 @@ export class Environment {
     this.scene = scene
     this.obstacles = []
     this.bumps = []
+    this.fallenScooters = []
+    this.fallenPlayers = []
+    this.finishLinePos = 480
     this.createRoad()
     this.createDecorations()
+    this.createFinishLine()
   }
 
   createRoad() {
@@ -78,6 +82,52 @@ export class Environment {
         this.scene.add(bump)
         this.bumps.push(bump)
       }
+
+      // Mock Fallen Scooters
+      if (Math.random() > 0.8) {
+        const fsX = (Math.random() - 0.5) * 6
+        const fs = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 1.5), new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0x442200 }))
+        fs.position.set(fsX, 0.05, i + 5)
+        fs.rotation.z = Math.PI / 2 // Fallen on side
+        this.scene.add(fs)
+        this.fallenScooters.push(fs)
+      }
+
+      // Mock Fallen Players
+      if (Math.random() > 0.7) {
+        const fpX = (Math.random() - 0.5) * 7
+        const fp = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0xcc00ff, emissive: 0x220033 }))
+        fp.position.set(fpX, 0.2, i - 5)
+        fp.velocity = new THREE.Vector3() // For being kicked away
+        this.scene.add(fp)
+        this.fallenPlayers.push(fp)
+      }
     }
+  }
+
+  createFinishLine() {
+    const archGroup = new THREE.Group()
+    
+    // Left Pillar
+    const pillarL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 8, 0.5), new THREE.MeshStandardMaterial({ color: 0x444444 }))
+    pillarL.position.set(-5, 4, this.finishLinePos)
+    archGroup.add(pillarL)
+
+    // Right Pillar
+    const pillarR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 8, 0.5), new THREE.MeshStandardMaterial({ color: 0x444444 }))
+    pillarR.position.set(5, 4, this.finishLinePos)
+    archGroup.add(pillarR)
+
+    // Top Beam
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(10.5, 1, 0.5), new THREE.MeshStandardMaterial({ color: 0x333333 }))
+    beam.position.set(0, 8, this.finishLinePos)
+    archGroup.add(beam)
+
+    // "FINISH" Sign
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(8, 2), new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x004400 }))
+    sign.position.set(0, 8, this.finishLinePos + 0.3)
+    archGroup.add(sign)
+
+    this.scene.add(archGroup)
   }
 }

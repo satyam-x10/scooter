@@ -50,6 +50,8 @@ const pillion = new Passenger(scene, 0xff3333, -0.3, RECOVERY_DIST, ROAD_WIDTH)
 
 const uiSpeed = document.getElementById('speed')
 const uiInstability = document.getElementById('instability')
+const uiDistance = document.getElementById('distance')
+const uiArrow = document.getElementById('arrow')
 
 // --- Game Logic ---
 function update() {
@@ -109,13 +111,14 @@ function update() {
     }
   })
 
-  // Bumps (Refined: Speed-sensitive)
+  let onAnyBump = false
   world.bumps.forEach(bump => {
     const dx = Math.abs(scooterPos.x - bump.position.x)
     const dz = Math.abs(scooterPos.z - bump.position.z)
     
     // Accurate collider for bump (visual size: 4x1)
     if (dx < 2.2 && dz < 0.7) { 
+      onAnyBump = true
       const currentSpeed = Math.abs(scooter.speed)
       if (currentSpeed > 0.05) { // Even lower threshold
         if (rider.onScooter || pillion.onScooter) {
@@ -131,8 +134,55 @@ function update() {
         const bumpY = Math.sin(dz * 2) * 0.1
         scooter.mesh.position.y = THREE.MathUtils.lerp(scooter.mesh.position.y, bumpY, 0.2)
       }
-    } else {
-      scooter.mesh.position.y = THREE.MathUtils.lerp(scooter.mesh.position.y, 0, 0.1)
+    }
+  })
+  if (!onAnyBump) {
+    scooter.mesh.position.y = THREE.MathUtils.lerp(scooter.mesh.position.y, 0, 0.1)
+  }
+
+  // Fallen Scooters (Acts like cars/obstacles)
+  world.fallenScooters.forEach(obj => {
+    const dx = Math.abs(scooterPos.x - obj.position.x)
+    const dz = Math.abs(scooterPos.z - obj.position.z)
+    if (dx < 1.0 && dz < 1.5) {
+      if (rider.onScooter || pillion.onScooter) {
+        rider.fall(forward)
+        pillion.fall(forward)
+        scooter.speed = -0.1
+        scooter.mesh.position.z -= 0.5
+      }
+    }
+  })
+
+  // Fallen Mock Players (Can be kicked away)
+  world.fallenPlayers.forEach(obj => {
+    // Collision check
+    const dx = Math.abs(scooterPos.x - obj.position.x)
+    const dz = Math.abs(scooterPos.z - obj.position.z)
+    
+    if (dx < 0.8 && dz < 0.8 && scooter.speed > 0.05) {
+      // Kick them away (Reduced force)
+      const kickDir = new THREE.Vector3(
+        (obj.position.x - scooterPos.x) * 1.5,
+        0.8, // Lower vertical arc
+        scooter.speed * 4.0 // Much less forward launch (was 10.0)
+      )
+      obj.velocity.copy(kickDir)
+    }
+
+    // Physics update for mock players
+    if (obj.velocity.lengthSq() > 0.001) {
+      obj.position.add(obj.velocity)
+      obj.velocity.y -= 0.05 // Gravity
+      obj.velocity.multiplyScalar(0.98) // Air resistance
+      
+      if (obj.position.y < 0.2) {
+        obj.position.y = 0.2
+        obj.velocity.set(0, 0, 0)
+      }
+      
+      // Clamp to road
+      obj.position.x = THREE.MathUtils.clamp(obj.position.x, -ROAD_WIDTH, ROAD_WIDTH)
     }
   })
 
@@ -192,7 +242,21 @@ function update() {
   camera.position.lerp(desiredCamPos, 0.05)
   
   // UI Update
+  const isFinished = scooterPos.z > world.finishLinePos
   uiSpeed.innerText = `Speed: ${(scooter.speed * 100).toFixed(1)} | Rider: ${rider.onScooter ? 'ON' : 'OFF'} | Pillion: ${pillion.onScooter ? 'ON' : 'OFF'}`
+  
+  // Compass Logic
+  const distToFinish = world.finishLinePos - scooterPos.z
+  uiDistance.innerText = `${Math.max(0, distToFinish).toFixed(0)}m`
+  
+  // Arrow Rotation (Points to finish line relative to scooter view)
+  // Since road is straight, we calculate based on scooter's rotation.y
+  const angleToFinish = -scooter.rotation
+  uiArrow.style.transform = `rotate(${angleToFinish}rad)`
+
+  if (isFinished) {
+    uiSpeed.innerHTML += `<br><span style="color: #00ff00; font-size: 1.5em; font-weight: bold;">🏁 FINISHED! 🏁</span>`
+  }
 }
 
 function animate() {
