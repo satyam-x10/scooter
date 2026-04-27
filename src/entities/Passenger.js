@@ -42,10 +42,10 @@ export class Passenger {
     if (Date.now() - this.recoveryTimestamp < 1000) return
 
     this.onScooter = false
-    // Dramatic toss
-    this.velocity.copy(impactVelocity).multiplyScalar(2.0)
-    this.velocity.y = 0.3 + Math.random() * 0.3
-    this.velocity.x += (Math.random() - 0.5) * 0.5
+    // Dramatic toss (Increased multiplier for far away landing)
+    this.velocity.copy(impactVelocity).multiplyScalar(4.0) 
+    this.velocity.y = 0.4 + Math.random() * 0.4
+    this.velocity.x += (Math.random() - 0.5) * 1.5
   }
 
   tryRecover(scooterPos) {

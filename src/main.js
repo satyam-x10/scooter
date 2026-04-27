@@ -82,18 +82,12 @@ function update() {
   const forward = scooter.getForward()
   const scooterPos = scooter.mesh.position
 
-  // CURB COLLISION (Speed-based)
+  // CURB COLLISION (Slowing only)
   const isOffRoad = Math.abs(scooterPos.x) > ROAD_WIDTH
   if (isOffRoad) {
-    if (Math.abs(scooter.speed) > 0.1 || Math.abs(scooter.rotation) > 0.05) {
-      if (rider.onScooter || pillion.onScooter) {
-        rider.fall(forward)
-        pillion.fall(forward)
-        scooter.speed = -0.05 // Stop
-      }
-    }
-    // Kick back into the road to prevent passing through
-    scooter.mesh.position.x = THREE.MathUtils.lerp(scooterPos.x, Math.sign(scooterPos.x) * ROAD_WIDTH, 0.5)
+    scooter.speed *= 0.8 // Slow down on curb
+    // Keep within reasonable bounds but don't throw off
+    scooter.mesh.position.x = THREE.MathUtils.clamp(scooterPos.x, -(ROAD_WIDTH + 0.1), ROAD_WIDTH + 0.1)
   }
 
   // Obstacles (Cars) - Refined collision
@@ -115,24 +109,25 @@ function update() {
     }
   })
 
-  // Bumps (Refined)
+  // Bumps (Refined: Speed-sensitive)
   world.bumps.forEach(bump => {
     const dx = Math.abs(scooterPos.x - bump.position.x)
     const dz = Math.abs(scooterPos.z - bump.position.z)
     
     if (dx < 2.5 && dz < 0.8) {
-      const force = Math.abs(scooter.speed) * 3.5
-      if (force > 0.1) {
+      const currentSpeed = Math.abs(scooter.speed)
+      if (currentSpeed > 0.15) { // High speed threshold
         if (rider.onScooter || pillion.onScooter) {
           rider.fall(forward)
           pillion.fall(forward)
           scooter.speed = -0.05
-          // Kick up and back slightly
           scooter.mesh.position.y += 0.5
           scooter.mesh.position.z -= 0.5
         }
       } else {
-        scooter.mesh.position.y = 0.1 + Math.sin(Date.now() * 0.05) * force
+        // Slow speed: Just pass over normally with a small bump animation
+        const bumpY = Math.sin(dz * 2) * 0.1
+        scooter.mesh.position.y = THREE.MathUtils.lerp(scooter.mesh.position.y, bumpY, 0.2)
       }
     } else {
       scooter.mesh.position.y = THREE.MathUtils.lerp(scooter.mesh.position.y, 0, 0.1)
