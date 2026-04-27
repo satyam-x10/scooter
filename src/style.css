@@ -6,8 +6,9 @@
 
 body {
   overflow: hidden;
-  background-color: #111;
-  font-family: 'Inter', sans-serif;
+  background-color: #1a1a1a;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: white;
 }
 
 canvas {
@@ -18,33 +19,49 @@ canvas {
   position: absolute;
   top: 20px;
   left: 20px;
-  color: white;
   pointer-events: none;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
 }
 
 .controls-info {
-  background: rgba(0, 0, 0, 0.5);
-  padding: 15px;
-  border-radius: 8px;
-  backdrop-filter: blur(5px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 15, 15, 0.85);
+  padding: 20px;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  min-width: 300px;
 }
 
 .controls-info h2 {
-  margin-bottom: 10px;
-  font-size: 1.2rem;
+  margin-bottom: 12px;
+  font-size: 1.4rem;
+  background: linear-gradient(90deg, #ffcc00, #ff6600);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 1px;
 }
 
 .controls-info p {
-  margin: 5px 0;
-  font-size: 0.9rem;
-  opacity: 0.8;
+  margin: 8px 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
 }
 
 .stats {
-  margin-top: 10px;
-  font-family: monospace;
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  font-family: 'Courier New', Courier, monospace;
+  color: #00ffcc;
+  font-size: 0.9rem;
+}
+
+#speed {
+  font-weight: bold;
+}
+
+#instability {
+  color: #aaa;
+  margin-top: 5px;
 }

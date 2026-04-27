@@ -1,162 +1,169 @@
 import './style.css'
 import * as THREE from 'three'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
+import { InputManager } from './core/InputManager'
+import { Passenger } from './entities/Passenger'
+import { Scooter } from './entities/Scooter'
+import { Environment } from './world/Environment'
 
-// --- Scene Setup ---
+// --- Constants ---
+const MAX_SPEED = 0.5
+const ACCEL = 0.005
+const FRICTION = 0.98
+const STEER_SENSITIVITY = 0.04
+const RECOVERY_DIST = 1.5
+const ROAD_WIDTH = 4.5
+
+// --- Initialization ---
 const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x1a1a1a)
-scene.fog = new THREE.Fog(0x1a1a1a, 20, 100)
+scene.fog = new THREE.Fog(0x1a1a1a, 50, 150)
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+camera.position.set(0, 3, -6)
+
 const renderer = new THREE.WebGLRenderer({ antialias: true })
 renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.shadowMap.enabled = true
 document.body.appendChild(renderer.domElement)
 
-// --- Lighting ---
+const controls = new OrbitControls(camera, renderer.domElement)
+controls.enableDamping = true
+controls.dampingFactor = 0.05
+controls.minDistance = 3
+controls.maxDistance = 12
+controls.maxPolarAngle = Math.PI / 2.1
+
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
 scene.add(ambientLight)
 
 const sunLight = new THREE.DirectionalLight(0xffffff, 0.8)
-sunLight.position.set(10, 20, 10)
+sunLight.position.set(10, 30, 10)
 sunLight.castShadow = true
 scene.add(sunLight)
 
-// --- Ground ---
-const groundGeo = new THREE.PlaneGeometry(200, 200)
-const groundMat = new THREE.MeshBasicMaterial({ color: 0x333333 })
-const ground = new THREE.Mesh(groundGeo, groundMat)
-ground.rotation.x = -Math.PI / 2
-ground.receiveShadow = true
-scene.add(ground)
+const input = new InputManager()
+const world = new Environment(scene)
+const scooter = new Scooter(scene)
+const rider = new Passenger(scene, 0x3366ff, 0.3, RECOVERY_DIST, ROAD_WIDTH)
+const pillion = new Passenger(scene, 0xff3333, -0.3, RECOVERY_DIST, ROAD_WIDTH)
 
-// Add a grid helper for sense of movement
-const gridHelper = new THREE.GridHelper(200, 50, 0x444444, 0x222222)
-scene.add(gridHelper)
+const uiSpeed = document.getElementById('speed')
+const uiInstability = document.getElementById('instability')
 
-// --- Scooter Creation ---
-const scooterGroup = new THREE.Group()
+// --- Game Logic ---
+function update() {
+  const bothOn = rider.onScooter && pillion.onScooter
+  
+  // Scooter Update
+  scooter.update(ROAD_WIDTH, ACCEL, FRICTION, STEER_SENSITIVITY, input, bothOn)
 
-// Body (long cube)
-const bodyGeo = new THREE.BoxGeometry(0.4, 0.1, 1.2)
-const bodyMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 })
-const body = new THREE.Mesh(bodyGeo, bodyMat)
-body.position.y = 0.1
-body.castShadow = true
-scooterGroup.add(body)
+  // Recovery Controls
+  const moveSpeed = 0.15
+  if (!rider.onScooter) {
+    if (input.isDown('KeyW')) rider.mesh.position.z += moveSpeed
+    if (input.isDown('KeyS')) rider.mesh.position.z -= moveSpeed
+    if (input.isDown('KeyA')) rider.mesh.position.x += moveSpeed
+    if (input.isDown('KeyD')) rider.mesh.position.x -= moveSpeed
+    rider.showRecoveryRange(scooter.mesh.position)
+    if (rider.tryRecover(scooter.mesh.position)) scooter.speed = 0
+  }
+  
+  if (!pillion.onScooter) {
+    if (input.isDown('ArrowUp')) pillion.mesh.position.z += moveSpeed
+    if (input.isDown('ArrowDown')) pillion.mesh.position.z -= moveSpeed
+    if (input.isDown('ArrowLeft')) pillion.mesh.position.x += moveSpeed
+    if (input.isDown('ArrowRight')) pillion.mesh.position.x -= moveSpeed
+    pillion.showRecoveryRange(scooter.mesh.position)
+    if (pillion.tryRecover(scooter.mesh.position)) scooter.speed = 0
+  }
 
-// Front marker (small cube)
-const frontGeo = new THREE.BoxGeometry(0.3, 0.4, 0.1)
-const frontMat = new THREE.MeshBasicMaterial({ color: 0x3366ff })
-const frontMarker = new THREE.Mesh(frontGeo, frontMat)
-frontMarker.position.set(0, 0.3, 0.5)
-frontMarker.castShadow = true
-scooterGroup.add(frontMarker)
+  // Collisions
+  const forward = scooter.getForward()
+  const scooterPos = scooter.mesh.position
 
-// Back marker (small cube)
-const backGeo = new THREE.BoxGeometry(0.3, 0.2, 0.1)
-const backMat = new THREE.MeshBasicMaterial({ color: 0xff3333 })
-const backMarker = new THREE.Mesh(backGeo, backMat)
-backMarker.position.set(0, 0.2, -0.5)
-backMarker.castShadow = true
-scooterGroup.add(backMarker)
+  // CURB COLLISION (Speed-based)
+  const isOffRoad = Math.abs(scooterPos.x) > ROAD_WIDTH
+  if (isOffRoad) {
+    if (Math.abs(scooter.speed) > 0.1 || Math.abs(scooter.rotation) > 0.05) {
+      if (rider.onScooter || pillion.onScooter) {
+        rider.fall(forward)
+        pillion.fall(forward)
+        scooter.speed = -0.05 // Stop
+      }
+    }
+    // Kick back into the road to prevent passing through
+    scooter.mesh.position.x = THREE.MathUtils.lerp(scooterPos.x, Math.sign(scooterPos.x) * ROAD_WIDTH, 0.5)
+  }
 
-scene.add(scooterGroup)
+  // Obstacles (Cars) - Refined collision
+  world.obstacles.forEach(obj => {
+    const dx = Math.abs(scooterPos.x - obj.position.x)
+    const dz = Math.abs(scooterPos.z - obj.position.z)
+    
+    // AABB-like check for cars (width: 2, depth: 4)
+    if (dx < 1.5 && dz < 2.5) {
+      if (rider.onScooter || pillion.onScooter) {
+        rider.fall(forward)
+        pillion.fall(forward)
+        // Hard bounce back and stop
+        scooter.speed = -0.1 
+        // Explicitly move OUT of the car to prevent tunneling
+        const dir = Math.sign(scooterPos.z - obj.position.z)
+        scooter.mesh.position.z += dir * 1.0 
+      }
+    }
+  })
 
-// --- Control State ---
-const keys = {
-  w: false,
-  s: false,
-  a: false,
-  d: false
+  // Bumps (Refined)
+  world.bumps.forEach(bump => {
+    const dx = Math.abs(scooterPos.x - bump.position.x)
+    const dz = Math.abs(scooterPos.z - bump.position.z)
+    
+    if (dx < 2.5 && dz < 0.8) {
+      const force = Math.abs(scooter.speed) * 3.5
+      if (force > 0.1) {
+        if (rider.onScooter || pillion.onScooter) {
+          rider.fall(forward)
+          pillion.fall(forward)
+          scooter.speed = -0.05
+          // Kick up and back slightly
+          scooter.mesh.position.y += 0.5
+          scooter.mesh.position.z -= 0.5
+        }
+      } else {
+        scooter.mesh.position.y = 0.1 + Math.sin(Date.now() * 0.05) * force
+      }
+    } else {
+      scooter.mesh.position.y = THREE.MathUtils.lerp(scooter.mesh.position.y, 0, 0.1)
+    }
+  })
+
+  rider.update(scooter.mesh.position, scooter.mesh.quaternion)
+  pillion.update(scooter.mesh.position, scooter.mesh.quaternion)
+
+  // Camera Target
+  let camTarget = scooter.mesh.position.clone()
+  if (!rider.onScooter && !pillion.onScooter) {
+    camTarget.addVectors(rider.mesh.position, pillion.mesh.position).multiplyScalar(0.5)
+  } else if (!rider.onScooter) {
+    camTarget.copy(rider.mesh.position)
+  } else if (!pillion.onScooter) {
+    camTarget.copy(pillion.mesh.position)
+  }
+  controls.target.lerp(camTarget, 0.1)
+  
+  // UI Update
+  uiSpeed.innerText = `Speed: ${(scooter.speed * 100).toFixed(1)} | Rider: ${rider.onScooter ? 'ON' : 'OFF'} | Pillion: ${pillion.onScooter ? 'ON' : 'OFF'}`
 }
 
-window.addEventListener('keydown', (e) => {
-  const key = e.key.toLowerCase()
-  if (keys.hasOwnProperty(key)) keys[key] = true
-})
-
-window.addEventListener('keyup', (e) => {
-  const key = e.key.toLowerCase()
-  if (keys.hasOwnProperty(key)) keys[key] = false
-})
-
-// --- Movement Variables ---
-let speed = 0
-let rotation = 0
-let driftFactor = 0
-const maxSpeed = 0.4
-const acceleration = 0.005
-const friction = 0.98
-const steeringSensitivity = 0.04
-
-// UI Elements
-const speedEl = document.getElementById('speed')
-const instabilityEl = document.getElementById('instability')
-
-// --- Main Loop ---
 function animate() {
   requestAnimationFrame(animate)
-
-  // 1. Acceleration / Braking (Player 2)
-  if (keys.w) speed += acceleration
-  if (keys.s) speed -= acceleration * 1.5 // Braking is stronger
-  
-  speed *= friction // Constant air/ground resistance
-  if (Math.abs(speed) < 0.001) speed = 0
-
-  // 2. Steering (Player 1)
-  // Steering effectiveness decreases slightly at extreme speeds
-  const steeringEffect = steeringSensitivity * (1 - Math.abs(speed) / (maxSpeed * 2))
-  
-  if (keys.a) rotation += steeringEffect
-  if (keys.d) rotation -= steeringEffect
-
-  // 3. Instability / Drift (VERY IMPORTANT)
-  // At high speeds, the scooter "slides" more
-  const speedRatio = Math.abs(speed) / maxSpeed
-  const instability = Math.pow(speedRatio, 2) // Non-linear increase
-  
-  // Drift: a side-ways component to movement when turning at speed
-  // If we are turning (keys.a or keys.d), we apply drift
-  let targetDrift = 0
-  if (keys.a) targetDrift = -instability * 0.05
-  if (keys.d) targetDrift = instability * 0.05
-  
-  // Smooth drift factor transitions
-  driftFactor = THREE.MathUtils.lerp(driftFactor, targetDrift, 0.1)
-
-  // 4. Update Position
-  // Forward movement based on speed
-  scooterGroup.translateZ(speed)
-  // Apply rotation
-  scooterGroup.rotation.y = rotation
-  // Apply drift (side-ways movement)
-  scooterGroup.translateX(driftFactor)
-
-  // Subtle tilt and wobble based on steering and speed
-  const wobble = Math.sin(Date.now() * 0.02) * instability * 0.1
-  scooterGroup.rotation.z = THREE.MathUtils.lerp(scooterGroup.rotation.z, (-driftFactor * 5) + wobble, 0.1)
-
-  // 5. Camera Follow (Smooth lerp)
-  const cameraTargetPos = new THREE.Vector3()
-  // Dynamic camera distance based on speed
-  const camDist = 5 + speedRatio * 2
-  const camHeight = 2 + speedRatio * 0.5
-  const offset = new THREE.Vector3(0, camHeight, -camDist)
-  offset.applyQuaternion(scooterGroup.quaternion)
-  cameraTargetPos.addVectors(scooterGroup.position, offset)
-  
-  camera.position.lerp(cameraTargetPos, 0.1)
-  camera.lookAt(scooterGroup.position.clone().add(new THREE.Vector3(0, 0.5, 0)))
-
-  // 6. Update UI
-  speedEl.innerText = `Speed: ${(speed * 100).toFixed(1)}`
-  instabilityEl.innerText = `Instability: ${(instability * 100).toFixed(0)}%`
-
+  update()
+  controls.update()
   renderer.render(scene, camera)
 }
 
-// Handle Window Resize
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
