@@ -17,6 +17,7 @@ export class NetworkManager {
     this.onRoomUpdated = null
     this.onGameStarted = null
     this.onPartnerInput = null
+    this.onStateSync = null
     this.onPlayerDisconnected = null
     this.onError = null
     this.onConnectionChange = null
@@ -89,6 +90,10 @@ export class NetworkManager {
         if (this.onPartnerInput) this.onPartnerInput(payload)
         break
 
+      case 'STATE_SYNC':
+        if (this.onStateSync) this.onStateSync(payload)
+        break
+
       case 'PLAYER_DISCONNECTED':
         if (this.onPlayerDisconnected) this.onPlayerDisconnected(payload)
         break
@@ -128,6 +133,10 @@ export class NetworkManager {
 
   sendInput(keys) {
     this.send('INPUT', { keys })
+  }
+
+  sendState(state) {
+    this.send('STATE_SYNC', state)
   }
 
   disconnect() {

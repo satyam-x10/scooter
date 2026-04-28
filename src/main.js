@@ -183,83 +183,52 @@ function onResize() {
   renderer.setSize(window.innerWidth, window.innerHeight)
 }
 
-// --- Build combined key objects from local input + partner ---
-function getKeys() {
-  // Local keys (what this player actually presses)
-  const localKeys = {
-    w: input.isDown('KeyW'),
-    s: input.isDown('KeyS'),
+// --- State received from host (used by pillion) ---
+let receivedState = null
+
+net.onStateSync = (payload) => {
+  receivedState = payload
+}
+
+// --- Game Loop (Host / Rider) ---
+// Host runs the full simulation using local A/D + partner's W/S
+function updateAsHost() {
+  // Rider's local keys for steering
+  const riderKeys = {
     a: input.isDown('KeyA'),
     d: input.isDown('KeyD'),
   }
 
-  let riderKeys, pillionKeys
-
-  if (myRole === 'rider') {
-    // I am rider: my A/D steer, partner's W/S control speed
-    riderKeys = { a: localKeys.a, d: localKeys.d }
-    pillionKeys = { w: partnerKeys.w, s: partnerKeys.s }
-
-  } else {
-    // I am pillion: my W/S control speed, partner's A/D steer
-    riderKeys = { a: partnerKeys.a, d: partnerKeys.d }
-    pillionKeys = { w: localKeys.w, s: localKeys.s }
+  // Pillion's keys from network
+  const pillionKeys = {
+    w: partnerKeys.w || false,
+    s: partnerKeys.s || false,
   }
 
-  // Only send if keys changed (avoid spamming)
-  const keyStr = `${localKeys.w}${localKeys.s}${localKeys.a}${localKeys.d}`
-  if (keyStr !== lastSentKeys) {
-    lastSentKeys = keyStr
-    net.sendInput({ keys: localKeys })
-  }
-
-  return { riderKeys, pillionKeys, localKeys }
-}
-
-// --- Game Loop ---
-function update() {
-  const { riderKeys, pillionKeys, localKeys } = getKeys()
   const bothOn = rider.onScooter && pillion.onScooter
 
-  // Scooter Update
+  // Scooter physics
   scooter.update(ROAD_WIDTH, ACCEL, FRICTION, STEER_SENSITIVITY, riderKeys, pillionKeys, bothOn)
 
-  // Recovery Controls — rider uses WASD, pillion uses arrows
+  // --- Recovery (host handles both) ---
   const moveSpeed = 0.15
 
   if (!rider.onScooter) {
-    if (myRole === 'rider') {
-      // Rider recovers with WASD
-      if (input.isDown('KeyW')) rider.mesh.position.z += moveSpeed
-      if (input.isDown('KeyS')) rider.mesh.position.z -= moveSpeed
-      if (input.isDown('KeyA')) rider.mesh.position.x += moveSpeed
-      if (input.isDown('KeyD')) rider.mesh.position.x -= moveSpeed
-    } else {
-      // Pillion sees rider recovery from partner input
-      if (partnerKeys.a) rider.mesh.position.x += moveSpeed
-      if (partnerKeys.d) rider.mesh.position.x -= moveSpeed
-      // Partner sends W/S as forward/back for recovery too
-      if (partnerKeys.w) rider.mesh.position.z += moveSpeed
-      if (partnerKeys.s) rider.mesh.position.z -= moveSpeed
-    }
+    // Rider recovers locally with WASD
+    if (input.isDown('KeyW')) rider.mesh.position.z += moveSpeed
+    if (input.isDown('KeyS')) rider.mesh.position.z -= moveSpeed
+    if (input.isDown('KeyA')) rider.mesh.position.x += moveSpeed
+    if (input.isDown('KeyD')) rider.mesh.position.x -= moveSpeed
     rider.showRecoveryRange(scooter.mesh.position)
     if (rider.tryRecover(scooter.mesh.position)) scooter.speed = 0
   }
 
   if (!pillion.onScooter) {
-    if (myRole === 'pillion') {
-      // Pillion recovers with WASD (remapped: W/S/A/D for walk)
-      if (input.isDown('KeyW')) pillion.mesh.position.z += moveSpeed
-      if (input.isDown('KeyS')) pillion.mesh.position.z -= moveSpeed
-      if (input.isDown('KeyA')) pillion.mesh.position.x += moveSpeed
-      if (input.isDown('KeyD')) pillion.mesh.position.x -= moveSpeed
-    } else {
-      // Rider sees pillion recovery from partner input
-      if (partnerKeys.w) pillion.mesh.position.z += moveSpeed
-      if (partnerKeys.s) pillion.mesh.position.z -= moveSpeed
-      if (partnerKeys.a) pillion.mesh.position.x += moveSpeed
-      if (partnerKeys.d) pillion.mesh.position.x -= moveSpeed
-    }
+    // Pillion recovery uses partner's keys (W/S/A/D from pillion player)
+    if (partnerKeys.w) pillion.mesh.position.z += moveSpeed
+    if (partnerKeys.s) pillion.mesh.position.z -= moveSpeed
+    if (partnerKeys.a) pillion.mesh.position.x += moveSpeed
+    if (partnerKeys.d) pillion.mesh.position.x -= moveSpeed
     pillion.showRecoveryRange(scooter.mesh.position)
     if (pillion.tryRecover(scooter.mesh.position)) scooter.speed = 0
   }
@@ -268,14 +237,13 @@ function update() {
   const forward = scooter.getForward()
   const scooterPos = scooter.mesh.position
 
-  // CURB COLLISION
-  const isOffRoad = Math.abs(scooterPos.x) > ROAD_WIDTH
-  if (isOffRoad) {
+  // Curb
+  if (Math.abs(scooterPos.x) > ROAD_WIDTH) {
     scooter.speed *= 0.8
     scooter.mesh.position.x = THREE.MathUtils.clamp(scooterPos.x, -(ROAD_WIDTH + 0.1), ROAD_WIDTH + 0.1)
   }
 
-  // Obstacles (Cars)
+  // Cars
   world.obstacles.forEach(obj => {
     const dx = Math.abs(scooterPos.x - obj.position.x)
     const dz = Math.abs(scooterPos.z - obj.position.z)
@@ -284,8 +252,7 @@ function update() {
         rider.fall(forward)
         pillion.fall(forward)
         scooter.speed = -0.1
-        const dir = Math.sign(scooterPos.z - obj.position.z)
-        scooter.mesh.position.z += dir * 1.0
+        scooter.mesh.position.z += Math.sign(scooterPos.z - obj.position.z) * 1.0
       }
     }
   })
@@ -297,8 +264,7 @@ function update() {
     const dz = Math.abs(scooterPos.z - bump.position.z)
     if (dx < 2.2 && dz < 0.7) {
       onAnyBump = true
-      const currentSpeed = Math.abs(scooter.speed)
-      if (currentSpeed > 0.05) {
+      if (Math.abs(scooter.speed) > 0.05) {
         if (rider.onScooter || pillion.onScooter) {
           rider.fall(forward)
           pillion.fall(forward)
@@ -307,8 +273,7 @@ function update() {
           scooter.mesh.position.z -= 1.0
         }
       } else {
-        const bumpY = Math.sin(dz * 2) * 0.1
-        scooter.mesh.position.y = THREE.MathUtils.lerp(scooter.mesh.position.y, bumpY, 0.2)
+        scooter.mesh.position.y = THREE.MathUtils.lerp(scooter.mesh.position.y, Math.sin(dz * 2) * 0.1, 0.2)
       }
     }
   })
@@ -335,21 +300,15 @@ function update() {
     const dx = Math.abs(scooterPos.x - obj.position.x)
     const dz = Math.abs(scooterPos.z - obj.position.z)
     if (dx < 0.8 && dz < 0.8 && scooter.speed > 0.05) {
-      const kickDir = new THREE.Vector3(
-        (obj.position.x - scooterPos.x) * 1.5,
-        0.8,
-        scooter.speed * 4.0
-      )
-      obj.velocity.copy(kickDir)
+      obj.velocity.copy(new THREE.Vector3(
+        (obj.position.x - scooterPos.x) * 1.5, 0.8, scooter.speed * 4.0
+      ))
     }
     if (obj.velocity.lengthSq() > 0.001) {
       obj.position.add(obj.velocity)
       obj.velocity.y -= 0.05
       obj.velocity.multiplyScalar(0.98)
-      if (obj.position.y < 0.2) {
-        obj.position.y = 0.2
-        obj.velocity.set(0, 0, 0)
-      }
+      if (obj.position.y < 0.2) { obj.position.y = 0.2; obj.velocity.set(0, 0, 0) }
       obj.position.x = THREE.MathUtils.clamp(obj.position.x, -ROAD_WIDTH, ROAD_WIDTH)
     }
   })
@@ -357,14 +316,90 @@ function update() {
   rider.update(scooter.mesh.position, scooter.mesh.quaternion)
   pillion.update(scooter.mesh.position, scooter.mesh.quaternion)
 
-  // --- Camera ---
+  // --- Broadcast state to pillion ---
+  net.sendState({
+    scooter: {
+      px: scooter.mesh.position.x, py: scooter.mesh.position.y, pz: scooter.mesh.position.z,
+      ry: scooter.mesh.rotation.y,
+      speed: scooter.speed,
+      rot: scooter.rotation,
+    },
+    rider: {
+      px: rider.mesh.position.x, py: rider.mesh.position.y, pz: rider.mesh.position.z,
+      on: rider.onScooter,
+      vx: rider.velocity.x, vy: rider.velocity.y, vz: rider.velocity.z,
+    },
+    pillion: {
+      px: pillion.mesh.position.x, py: pillion.mesh.position.y, pz: pillion.mesh.position.z,
+      on: pillion.onScooter,
+      vx: pillion.velocity.x, vy: pillion.velocity.y, vz: pillion.velocity.z,
+    },
+  })
+}
+
+// --- Game Loop (Client / Pillion) ---
+// Pillion sends inputs and applies the host's state directly
+function updateAsClient() {
+  // Send my input to host (all keys, host uses W/S for speed + A/D for pillion recovery)
+  const localKeys = {
+    w: input.isDown('KeyW'),
+    s: input.isDown('KeyS'),
+    a: input.isDown('KeyA'),
+    d: input.isDown('KeyD'),
+  }
+  const keyStr = `${localKeys.w}${localKeys.s}${localKeys.a}${localKeys.d}`
+  if (keyStr !== lastSentKeys) {
+    lastSentKeys = keyStr
+    net.sendInput(localKeys)
+  }
+
+  // Apply host state if available
+  if (receivedState) {
+    const s = receivedState
+
+    // Scooter
+    scooter.mesh.position.set(s.scooter.px, s.scooter.py, s.scooter.pz)
+    scooter.mesh.rotation.y = s.scooter.ry
+    scooter.speed = s.scooter.speed
+    scooter.rotation = s.scooter.rot
+
+    // Rider
+    rider.mesh.position.set(s.rider.px, s.rider.py, s.rider.pz)
+    rider.onScooter = s.rider.on
+    rider.velocity.set(s.rider.vx, s.rider.vy, s.rider.vz)
+    if (rider.onScooter) {
+      rider.mesh.quaternion.copy(scooter.mesh.quaternion)
+    }
+
+    // Pillion
+    pillion.mesh.position.set(s.pillion.px, s.pillion.py, s.pillion.pz)
+    pillion.onScooter = s.pillion.on
+    pillion.velocity.set(s.pillion.vx, s.pillion.vy, s.pillion.vz)
+    if (pillion.onScooter) {
+      pillion.mesh.quaternion.copy(scooter.mesh.quaternion)
+    }
+
+    // Show recovery indicators for pillion's own character
+    if (!pillion.onScooter) {
+      pillion.showRecoveryRange(scooter.mesh.position)
+    }
+    if (!rider.onScooter) {
+      rider.showRecoveryRange(scooter.mesh.position)
+    }
+  }
+}
+
+// --- Shared: Camera + UI (runs on both host and client) ---
+function updateCameraAndUI() {
+  const scooterPos = scooter.mesh.position
+
   let camTarget = new THREE.Vector3()
   let camOffset = new THREE.Vector3(0, 1.5, -3.5)
 
   if (rider.onScooter && pillion.onScooter) {
-    camTarget.copy(scooter.mesh.position)
+    camTarget.copy(scooterPos)
     camOffset.set(0, 1.5, -3.5).applyQuaternion(scooter.mesh.quaternion)
-  } else if (!rider.onScooter || !pillion.onScooter) {
+  } else {
     const activeRider = !rider.onScooter
     const activePillion = !pillion.onScooter
 
@@ -377,7 +412,6 @@ function update() {
     }
 
     let moveDir = new THREE.Vector3()
-    // Camera follows current player's input
     if (input.isDown('KeyW')) moveDir.z += 1
     if (input.isDown('KeyS')) moveDir.z -= 1
     if (input.isDown('KeyA')) moveDir.x += 1
@@ -392,10 +426,9 @@ function update() {
   }
 
   controls.target.lerp(camTarget, 0.1)
-  const desiredCamPos = camTarget.clone().add(camOffset)
-  camera.position.lerp(desiredCamPos, 0.05)
+  camera.position.lerp(camTarget.clone().add(camOffset), 0.05)
 
-  // --- UI Update ---
+  // UI
   const isFinished = scooterPos.z > world.finishLinePos
   uiSpeed.innerText = `Speed: ${(scooter.speed * 100).toFixed(1)} | Rider: ${rider.onScooter ? 'ON' : 'OFF'} | Pillion: ${pillion.onScooter ? 'ON' : 'OFF'}`
 
@@ -404,10 +437,8 @@ function update() {
 
   const dx = 0 - scooterPos.x
   const dz = world.finishLinePos - scooterPos.z
-  const targetAngle = -Math.atan2(dx, dz)
-  uiWaypoint.style.transform = `rotate(${targetAngle}rad)`
-  const currentHeading = -scooter.mesh.rotation.y
-  uiHeading.style.transform = `rotate(${currentHeading}rad)`
+  uiWaypoint.style.transform = `rotate(${-Math.atan2(dx, dz)}rad)`
+  uiHeading.style.transform = `rotate(${-scooter.mesh.rotation.y}rad)`
 
   if (isFinished) {
     uiSpeed.innerHTML += `<br><span style="color: #00ff00; font-size: 1.5em; font-weight: bold;">🏁 FINISHED! 🏁</span>`
@@ -417,7 +448,14 @@ function update() {
 function animate() {
   if (!gameRunning) return
   requestAnimationFrame(animate)
-  update()
+
+  if (myRole === 'rider') {
+    updateAsHost()
+  } else {
+    updateAsClient()
+  }
+  updateCameraAndUI()
+
   controls.update()
   renderer.render(scene, camera)
 }

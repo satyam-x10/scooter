@@ -24,7 +24,7 @@ export class LobbyUI {
           <input type="text" id="lobby-name" class="lobby-input" placeholder="Enter your name..." maxlength="16" autocomplete="off" />
         </div>
 
-        <div class="lobby-section" id="lobby-menu" style="display:none;">
+        <div class="lobby-section" id="lobby-menu">
           <div class="lobby-buttons">
             <button id="btn-create" class="lobby-btn lobby-btn-primary">
               <span class="btn-icon">🏠</span>
@@ -85,10 +85,13 @@ export class LobbyUI {
     const nameInput = document.getElementById('lobby-name')
     const menuSection = document.getElementById('lobby-menu')
 
-    // Show menu once name is entered
+    // Load saved name from localStorage
+    const savedName = localStorage.getItem('scooter_player_name') || ''
+    if (savedName) nameInput.value = savedName
+
+    // Save name on change
     nameInput.addEventListener('input', () => {
-      const hasName = nameInput.value.trim().length > 0
-      menuSection.style.display = hasName ? 'block' : 'none'
+      localStorage.setItem('scooter_player_name', nameInput.value.trim())
     })
 
     // Create Room
