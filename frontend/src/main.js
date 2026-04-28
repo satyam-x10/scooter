@@ -17,7 +17,8 @@ const RECOVERY_DIST = 1.5
 const ROAD_WIDTH = 4.5
 
 // Use localhost for dev, override for production
-const WS_URL = `ws://${window.location.hostname || 'localhost'}:8080`
+// const WS_URL = `ws://${window.location.hostname || 'localhost'}:8080`
+const WS_URL = `wss://scooter-vhds.onrender.com`
 
 // --- State ---
 let gameRunning = false
