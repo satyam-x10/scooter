@@ -396,20 +396,17 @@ function updateCameraAndUI() {
   let camTarget = new THREE.Vector3()
   let camOffset = new THREE.Vector3(0, 1.5, -3.5)
 
-  if (rider.onScooter && pillion.onScooter) {
+  // Camera always follows YOUR character
+  const myCharacter = myRole === 'rider' ? rider : pillion
+  const myOnScooter = myCharacter.onScooter
+
+  if (myOnScooter) {
+    // On scooter: follow scooter from behind
     camTarget.copy(scooterPos)
     camOffset.set(0, 1.5, -3.5).applyQuaternion(scooter.mesh.quaternion)
   } else {
-    const activeRider = !rider.onScooter
-    const activePillion = !pillion.onScooter
-
-    if (activeRider && activePillion) {
-      camTarget.addVectors(rider.mesh.position, pillion.mesh.position).multiplyScalar(0.5)
-    } else if (activeRider) {
-      camTarget.copy(rider.mesh.position)
-    } else {
-      camTarget.copy(pillion.mesh.position)
-    }
+    // Fallen off: follow your own character
+    camTarget.copy(myCharacter.mesh.position)
 
     let moveDir = new THREE.Vector3()
     if (input.isDown('KeyW')) moveDir.z += 1
