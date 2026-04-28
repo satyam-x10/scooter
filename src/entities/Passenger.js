@@ -40,8 +40,6 @@ export class Passenger {
 
   fall(impactVelocity) {
     if (!this.onScooter) return
-    // Temporarily removed immunity to ensure both fall consistently
-    // if (Date.now() - this.recoveryTimestamp < 1000) return
 
     this.onScooter = false
     this.fallTimestamp = Date.now()
@@ -49,9 +47,10 @@ export class Passenger {
     const speedScale = impactVelocity.length() * 0.8 
     this.velocity.copy(impactVelocity).normalize().multiplyScalar(speedScale)
     this.velocity.y = 0.2 + speedScale * 0.1
-    // Add side variation so they don't land in the same spot
-    this.velocity.x += (Math.random() - 0.5) * (0.5 + speedScale)
-    this.velocity.z += (Math.random() - 0.5) * 0.2
+    // Deterministic side variation using offset (different for rider/pillion)
+    const sign = this.offsetZ > 0 ? 1 : -1
+    this.velocity.x += sign * 0.3 * (0.5 + speedScale)
+    this.velocity.z += sign * 0.1
   }
 
   tryRecover(scooterPos) {

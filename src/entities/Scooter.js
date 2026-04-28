@@ -15,12 +15,23 @@ export class Scooter {
     this.rotation = 0
   }
 
-  update(roadWidth, accel, friction, steerSens, keys, canDrive) {
+  /**
+   * @param {number} roadWidth
+   * @param {number} accel
+   * @param {number} friction
+   * @param {number} steerSens
+   * @param {object} riderKeys  - { a: bool, d: bool } steering from rider
+   * @param {object} pillionKeys - { w: bool, s: bool } throttle from pillion
+   * @param {boolean} canDrive
+   */
+  update(roadWidth, accel, friction, steerSens, riderKeys, pillionKeys, canDrive) {
     if (canDrive) {
-      if (keys.isDown('KeyW')) this.speed += accel
-      if (keys.isDown('KeyS')) this.speed -= accel * 2
-      if (keys.isDown('KeyA')) this.rotation += steerSens
-      if (keys.isDown('KeyD')) this.rotation -= steerSens
+      // Pillion controls speed (W/S)
+      if (pillionKeys.w) this.speed += accel
+      if (pillionKeys.s) this.speed -= accel * 2
+      // Rider controls direction (A/D)
+      if (riderKeys.a) this.rotation += steerSens
+      if (riderKeys.d) this.rotation -= steerSens
     } else {
       this.speed *= 0.95
     }

@@ -1,13 +1,25 @@
+// Seeded PRNG - Mulberry32
+function mulberry32(seed) {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 import * as THREE from 'three'
 
 export class Environment {
-  constructor(scene) {
+  constructor(scene, seed = 12345) {
     this.scene = scene
     this.obstacles = []
     this.bumps = []
     this.fallenScooters = []
     this.fallenPlayers = []
     this.finishLinePos = 480
+    this.rng = mulberry32(seed)
     this.createRoad()
     this.createDecorations()
     this.createFinishLine()
@@ -53,11 +65,13 @@ export class Environment {
   }
 
   createDecorations() {
+    const rng = this.rng
+
     for (let i = -400; i < 400; i += 20) {
       if (Math.abs(i) < 10) continue
 
       // Trees
-      const treeX = (Math.random() > 0.5 ? 1 : -1) * (7 + Math.random() * 5)
+      const treeX = (rng() > 0.5 ? 1 : -1) * (7 + rng() * 5)
       const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.5, 3, 0.5), new THREE.MeshBasicMaterial({ color: 0x4d2926 }))
       trunk.position.set(treeX, 1.5, i)
       this.scene.add(trunk)
@@ -66,26 +80,26 @@ export class Environment {
       this.scene.add(leaves)
 
       // Obstacles (Cars)
-      if (Math.random() > 0.7) {
-        const carX = (Math.random() - 0.5) * 6
-        const car = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4), new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff }))
-        car.position.set(carX, 0.5, i + Math.random() * 10)
+      if (rng() > 0.7) {
+        const carX = (rng() - 0.5) * 6
+        const car = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4), new THREE.MeshBasicMaterial({ color: rng() * 0xffffff }))
+        car.position.set(carX, 0.5, i + rng() * 10)
         this.scene.add(car)
         this.obstacles.push(car)
       }
 
       // Bumps
-      if (Math.random() > 0.6) {
-        const bumpX = (Math.random() - 0.5) * 8
+      if (rng() > 0.6) {
+        const bumpX = (rng() - 0.5) * 8
         const bump = new THREE.Mesh(new THREE.BoxGeometry(4, 0.2, 1), new THREE.MeshBasicMaterial({ color: 0x444444 }))
-        bump.position.set(bumpX, 0.1, i + Math.random() * 10)
+        bump.position.set(bumpX, 0.1, i + rng() * 10)
         this.scene.add(bump)
         this.bumps.push(bump)
       }
 
       // Mock Fallen Scooters
-      if (Math.random() > 0.8) {
-        const fsX = (Math.random() - 0.5) * 6
+      if (rng() > 0.8) {
+        const fsX = (rng() - 0.5) * 6
         const fs = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 1.5), new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0x442200 }))
         fs.position.set(fsX, 0.05, i + 5)
         fs.rotation.z = Math.PI / 2 // Fallen on side
@@ -94,8 +108,8 @@ export class Environment {
       }
 
       // Mock Fallen Players
-      if (Math.random() > 0.7) {
-        const fpX = (Math.random() - 0.5) * 7
+      if (rng() > 0.7) {
+        const fpX = (rng() - 0.5) * 7
         const fp = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0xcc00ff, emissive: 0x220033 }))
         fp.position.set(fpX, 0.2, i - 5)
         fp.velocity = new THREE.Vector3() // For being kicked away

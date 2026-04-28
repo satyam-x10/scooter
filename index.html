@@ -4,9 +4,14 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Scooter Chaos Simulator</title>
+    <title>Scooter Chaos - Co-op Multiplayer</title>
+    <meta name="description" content="Ride together or crash together! A co-op multiplayer scooter chaos simulator." />
   </head>
   <body>
+    <!-- Lobby Screen -->
+    <div id="lobby"></div>
+
+    <!-- Game HUD (hidden until game starts) -->
     <div id="ui" style="display: none;">
       <div class="controls-info">
         <div class="stats">
@@ -16,13 +21,31 @@
       </div>
     </div>
 
-    <div id="compass">
+    <!-- Role HUD (top center) -->
+    <div id="role-hud">
+      <span class="role-hud-label">You are</span>
+      <span class="role-hud-value" id="role-hud-value">RIDER</span>
+      <span class="role-hud-keys" id="role-hud-keys">[A/D]</span>
+    </div>
+
+    <!-- Compass -->
+    <div id="compass" style="display: none;">
       <div id="distance">--- m</div>
       <div class="needle-container">
         <div id="waypoint-arrow" title="Finish Direction"></div>
         <div id="heading-arrow" title="Current Heading"></div>
       </div>
     </div>
+
+    <!-- Disconnect Overlay -->
+    <div id="disconnect-overlay">
+      <div class="disconnect-card">
+        <h2>⚠️ Partner Disconnected</h2>
+        <p>Your partner left the game.</p>
+        <button class="lobby-btn lobby-btn-primary" onclick="location.reload()">Back to Lobby</button>
+      </div>
+    </div>
+
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
